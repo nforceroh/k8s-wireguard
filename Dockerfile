@@ -26,5 +26,6 @@ RUN \
     echo "net.ipv6.conf.eth0.disable_ipv6 = 1" >> /etc/sysctl.conf
 
 ADD --chmod=755 /content/etc/s6-overlay /etc/s6-overlay
+ADD --chmod=755 /content/usr/local/bin /usr/local/bin
 
 #ENTRYPOINT ["bash", "/usr/local/bin/entrypoint.sh"]

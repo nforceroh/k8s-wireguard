@@ -9,7 +9,7 @@ LABEL \
 
 RUN apk add --no-cache bc grep iproute2 iptables iptables-legacy ip6tables \
     iputils ipcalc kmod libcap-utils libqrencode-tools net-tools \
-    wireguard-tools libnatpmp openresolv moreutils \
+    wireguard-tools libnatpmp openresolv moreutils python3 \
   && echo "wireguard" >> /etc/modules \
   && echo "**** clean up ****" \
   && rm -rf /tmp/*

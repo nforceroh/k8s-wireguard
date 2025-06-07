@@ -1,0 +1,4 @@
+#!/usr/bin/with-contenv bash
+# shellcheck shell=bash
+
+python3 /usr/local/bin/wg_healthcheck.py

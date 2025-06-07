@@ -82,6 +82,4 @@ fi
 # Infinite sleep
 sleep infinity &
 
-# healthcheck
-python3 /usr/local/bin/wg_healthcheck.py & 
 wait $!

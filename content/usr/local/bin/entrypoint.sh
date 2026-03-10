@@ -73,6 +73,8 @@ fi
 ip route replace "${endpoint_ip}/32" via "${default_gateway}" dev eth0
 route -n
 
+echo "Resetting resolvconf state"
+resolvconf -u 2>/dev/null || true
 
 echo "Initiating VPN connection"
 if ! wg-quick up "$config_file"; then

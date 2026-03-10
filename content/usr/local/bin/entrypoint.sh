@@ -28,11 +28,14 @@ if [[ ! -f "$config_file" ]]; then
 fi
 
 interface=$(basename "${config_file%.*}")
-endpoint=$(grep -i Endpoint "$config_file" | awk '{print $3}' | cut -f1 -d:)
+endpoint=$(awk -F= '/^[[:space:]]*Endpoint[[:space:]]*=/{gsub(/[[:space:]]/, "", $2); print $2; exit}' "$config_file" | cut -f1 -d:)
 if [[ -z "$endpoint" ]]; then
   echo "Unable to parse endpoint from ${config_file}" >&2
   exit 1
 fi
+
+echo "Using interface: ${interface}"
+echo "Using endpoint host: ${endpoint}"
 
 if [[ "$endpoint" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
   endpoint_ip="$endpoint"
@@ -43,6 +46,8 @@ else
     exit 1
   fi
 fi
+
+echo "Resolved endpoint IP: ${endpoint_ip}"
 
 #sysctl -p
 
@@ -65,15 +70,17 @@ if [[ -z "$default_gateway" ]]; then
   echo "Unable to determine default gateway" >&2
   exit 1
 fi
-ip route del default
-ip route add "${endpoint_ip}/32" via "${default_gateway}" dev eth0
+ip route replace "${endpoint_ip}/32" via "${default_gateway}" dev eth0
 route -n
 
 
 echo "Initiating VPN connection"
-wg-quick up "$config_file"
+if ! wg-quick up "$config_file"; then
+  echo "wg-quick failed to bring up ${interface}" >&2
+  exit 1
+fi
 set_dns
-ip route add default dev "$interface"
+ip route replace default dev "$interface"
 
 # Create static routes for any ALLOWED_SUBNETS and punch holes in the firewall
 echo "Allowing traffic to local subnet ${pod_subnet}" >&2

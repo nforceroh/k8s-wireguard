@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -u
+
 pod_subnet=$(ip -4 -o addr show eth0 | awk '{print $4}'|awk -F\. '{print $1"."$2".0.0/16"}')
 
 PING_IP=${PING_IP:-1.1.1.1}
@@ -15,18 +17,32 @@ set_dns () {
 }
 
 finish () {
-    wg-quick down wg0
+  wg-quick down "${interface}" 2>/dev/null || true
     exit 0
 }
 
-config_file=$(find /etc/wireguard -type f -name '*.conf' | shuf -n 1)
-if [[ -z "$config_file" ]]; then
-    echo "No configuration files found in /etc/wireguard" >&2
+config_file=/etc/wireguard/wg0.conf
+if [[ ! -f "$config_file" ]]; then
+  echo "Configuration file not found: ${config_file}" >&2
     exit 1
 fi
 
 interface=$(basename "${config_file%.*}")
-endpoint=$(grep -i Endpoint $config_file |awk '{print $3}'|cut -f1 -d:)
+endpoint=$(grep -i Endpoint "$config_file" | awk '{print $3}' | cut -f1 -d:)
+if [[ -z "$endpoint" ]]; then
+  echo "Unable to parse endpoint from ${config_file}" >&2
+  exit 1
+fi
+
+if [[ "$endpoint" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+  endpoint_ip="$endpoint"
+else
+  endpoint_ip=$(getent ahostsv4 "$endpoint" | awk '{print $1; exit}')
+  if [[ -z "$endpoint_ip" ]]; then
+    echo "Unable to resolve endpoint host ${endpoint}" >&2
+    exit 1
+  fi
+fi
 
 #sysctl -p
 
@@ -45,21 +61,25 @@ ip r
 route -n
 echo "Setting up routing"
 default_gateway=$(ip -4 route | awk '$1 == "default" { print $3 }')
+if [[ -z "$default_gateway" ]]; then
+  echo "Unable to determine default gateway" >&2
+  exit 1
+fi
 ip route del default
-ip route add ${endpoint}/32 via ${default_gateway} dev eth0
+ip route add "${endpoint_ip}/32" via "${default_gateway}" dev eth0
 route -n
 
 
 echo "Initiating VPN connection"
-wg-quick up /etc/wireguard/wg0.conf
+wg-quick up "$config_file"
 set_dns
-ip route add default dev wg0
+ip route add default dev "$interface"
 
 # Create static routes for any ALLOWED_SUBNETS and punch holes in the firewall
 echo "Allowing traffic to local subnet ${pod_subnet}" >&2
 for subnet in ${ALLOWED_SUBNETS//,/ }; do
     echo "Add local subnet ${subnet} via ${default_gateway} dev eth0"
-    ip route add "$subnet" via "$default_gateway"
+  ip route add "$subnet" via "$default_gateway" dev eth0
 #    iptables --insert OUTPUT --destination "$subnet" --jump ACCEPT
 done
 echo "Allowing traffic to local cluster ${CLUSTER_SUBNET}" >&2
